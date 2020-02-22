@@ -27,7 +27,7 @@ namespace ModAssistant.Pages
     {
         public static Mods Instance = new Mods();
 
-        public List<string> DefaultMods = new List<string>(){ "SongLoader", "ScoreSaber", "BeatSaverDownloader", "BeatSaverVoting" };
+        public List<string> DefaultMods = new List<string>(){ "SongCore", "ScoreSaber", "BeatSaverDownloader", "BeatSaverVoting", "PlaylistCore", "Survey" };
         public Mod[] ModsList;
         public Mod[] AllModsList;
         public static List<Mod> InstalledMods = new List<Mod>();
@@ -121,6 +121,7 @@ namespace ModAssistant.Pages
             using (StreamReader reader = new StreamReader(stream))
             {
                 var serializer = new JavaScriptSerializer();
+                serializer.MaxJsonLength = Int32.MaxValue;
                 AllModsList = serializer.Deserialize<Mod[]>(reader.ReadToEnd());
             }
         }
@@ -363,7 +364,9 @@ namespace ModAssistant.Pages
 
         private byte[] DownloadMod (string link)
         {
-            byte[] zip = new WebClient().DownloadData(link);
+            WebClient webClient = new WebClient();
+            webClient.Headers.Add("user-agent", "ModAssistant/" + App.Version);
+            byte[] zip = webClient.DownloadData(link);
             return zip;
         }
 

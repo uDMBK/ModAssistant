@@ -49,17 +49,6 @@ namespace ModAssistant
 
             VersionText.Text = App.Version;
 
-            if (Utils.isVoid())
-            {
-                Main.Content = Invalid.Instance;
-                MainWindow.Instance.ModsButton.IsEnabled = false;
-                MainWindow.Instance.OptionsButton.IsEnabled = false;
-                MainWindow.Instance.IntroButton.IsEnabled = false;
-                MainWindow.Instance.AboutButton.IsEnabled = false;
-                MainWindow.Instance.GameVersionsBox.IsEnabled = false;
-                return;
-            }
-
             List<string> versions;
             string json = string.Empty;
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Utils.Constants.BeatModsAPIUrl + "version");
@@ -230,6 +219,8 @@ namespace ModAssistant
         {
             About.Instance.PatUp.IsOpen = false;
             About.Instance.PatButton.IsEnabled = true;
+            About.Instance.HugUp.IsOpen = false;
+            About.Instance.HugButton.IsEnabled = true;
         }
     }
 }
