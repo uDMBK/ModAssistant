@@ -88,7 +88,7 @@ namespace ModAssistant.Pages
             PropertyGroupDescription groupDescription = new PropertyGroupDescription("Category");
             view.GroupDescriptions.Add(groupDescription);
 
-            this.DataContext = this;
+            DataContext = this;
 
             RefreshModsList();
             ModsListView.Visibility = Visibility.Visible;
@@ -114,7 +114,7 @@ namespace ModAssistant.Pages
             string json = string.Empty;
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Utils.Constants.BeatModsAPIUrl + "mod");
             request.AutomaticDecompression = DecompressionMethods.GZip;
-            request.UserAgent = "ModAssistant/" + App.Version;
+            request.UserAgent = "uDMBK/" + App.Version;
 
             using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
             using (Stream stream = response.GetResponseStream())
@@ -204,7 +204,7 @@ namespace ModAssistant.Pages
             string json = string.Empty;
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(Utils.Constants.BeatModsAPIUrl + Utils.Constants.BeatModsModsOptions + "&gameVersion=" + MainWindow.GameVersion);
             request.AutomaticDecompression = DecompressionMethods.GZip;
-            request.UserAgent = "ModAssistant/" + App.Version;
+            request.UserAgent = "uDMBK/" + App.Version;
 
             try
             {
@@ -365,7 +365,7 @@ namespace ModAssistant.Pages
         private byte[] DownloadMod (string link)
         {
             WebClient webClient = new WebClient();
-            webClient.Headers.Add("user-agent", "ModAssistant/" + App.Version);
+            webClient.Headers.Add("user-agent", "uDMBK/" + App.Version);
             byte[] zip = webClient.DownloadData(link);
             return zip;
         }

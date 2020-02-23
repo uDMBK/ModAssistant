@@ -9,7 +9,7 @@
       Title="Mods">
 
     <Grid>
-		<ListView Name="ModsListView" Grid.Column="1" SelectionMode="Single" SelectionChanged="ModsListView_SelectionChanged">
+		<ListView Name="ModsListView" SelectionMode="Single" SelectionChanged="ModsListView_SelectionChanged" Background="{x:Null}" Foreground="DimGray" BorderBrush="{x:Null}">
 			<ListView.View>
 				<GridView>
 					<GridView.Columns>
@@ -20,9 +20,9 @@
 								</DataTemplate>
 							</GridViewColumn.CellTemplate>
 						</GridViewColumn>
-						<GridViewColumn Header="Name" DisplayMemberBinding="{Binding ModName}" />
+						<GridViewColumn Header="Name" DisplayMemberBinding="{Binding ModName}" Width="165"/>
 
-						<GridViewColumn x:Name="InstalledColumn" Header="Installed">
+						<GridViewColumn x:Name="InstalledColumn" Header="Installed" Width="60">
 							<GridViewColumn.CellTemplate>
 								<DataTemplate>
 									<TextBlock Text="{Binding InstalledVersion}" Foreground="{Binding GetVersionColor}" TextDecorations="{Binding GetVersionDecoration}" />
@@ -30,8 +30,8 @@
 							</GridViewColumn.CellTemplate>
 						</GridViewColumn>
 
-						<GridViewColumn Header="Latest" DisplayMemberBinding="{Binding ModVersion}" />
-						<GridViewColumn x:Name="DescriptionColumn" Header="Description" Width="750" >
+						<GridViewColumn Header="Latest" DisplayMemberBinding="{Binding ModVersion}" Width="60"/>
+						<GridViewColumn x:Name="DescriptionColumn" Header="Description" Width="620" >
 							<GridViewColumn.CellTemplate>
 								<DataTemplate>
 									<StackPanel Orientation="Horizontal">
@@ -50,7 +50,7 @@
 						<GridViewColumn x:Name="UninstallColumn"  Header="Uninstall" Width="70">
 							<GridViewColumn.CellTemplate>
 								<DataTemplate>
-									<Button Name="Uninstall" Content="Uninstall" Visibility="{Binding CanSeeDelete}" IsEnabled="{Binding CanDelete}" Foreground="Red" Tag="{Binding ModInfo}" Click="Uninstall_Click"/>
+                                    <Button Name="Uninstall" Content="Uninstall" Visibility="{Binding CanSeeDelete}" IsEnabled="{Binding CanDelete}" Background="#FF383131" BorderBrush="#FF111010" Foreground="White" Tag="{Binding ModInfo}" Click="Uninstall_Click"/>
 								</DataTemplate>
 							</GridViewColumn.CellTemplate>
 						</GridViewColumn>

@@ -26,7 +26,7 @@ namespace ModAssistant
             string json = string.Empty;
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(APILatestURL);
             request.AutomaticDecompression = DecompressionMethods.GZip;
-            request.UserAgent = "ModAssistant/" + App.Version;
+            request.UserAgent = "uDMBK/" + App.Version;
 
             using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
             using (Stream stream = response.GetResponseStream())
@@ -36,7 +36,7 @@ namespace ModAssistant
                 LatestUpdate = serializer.Deserialize<Update>(reader.ReadToEnd());
             }
             
-            LatestVersion = new Version(LatestUpdate.tag_name.Substring(1));
+            LatestVersion = new Version(LatestUpdate.tag_name.Substring(1).Replace("-unres", ""));
             CurrentVersion = new Version(App.Version);
 
 

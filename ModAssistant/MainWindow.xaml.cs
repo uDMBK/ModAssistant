@@ -84,15 +84,12 @@ namespace ModAssistant
 
             if (!Properties.Settings.Default.Agreed || String.IsNullOrEmpty(Properties.Settings.Default.LastTab))
             {
-                Main.Content = Intro.Instance;
+
             }
             else
             {
                 switch (Properties.Settings.Default.LastTab)
                 {
-                    case "Intro":
-                        Main.Content = Intro.Instance;
-                        break;
                     case "Mods":
                         Mods.Instance.LoadMods();
                         ModsOpened = true;
@@ -105,7 +102,9 @@ namespace ModAssistant
                         Main.Content = Options.Instance;
                         break;
                     default:
-                        Main.Content = Intro.Instance;
+                        Mods.Instance.LoadMods();
+                        ModsOpened = true;
+                        Main.Content = Mods.Instance;
                         break;
                 }
             }
@@ -155,9 +154,9 @@ namespace ModAssistant
 
         private void IntroButton_Click(object sender, RoutedEventArgs e)
         {
-            Main.Content = Intro.Instance;
-            Properties.Settings.Default.LastTab = "Intro";
-            Properties.Settings.Default.Save();
+            //Main.Content = Intro.Instance;
+            //Properties.Settings.Default.LastTab = "Intro";
+            //Properties.Settings.Default.Save();
         }
 
         private void AboutButton_Click(object sender, RoutedEventArgs e)
