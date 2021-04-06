@@ -1,35 +1,17 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
+using System;
 using System.Linq;
-using System.Net;
-using System.Web;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Security.Principal;
 using Microsoft.Win32;
-using System.IO.Compression;
-using System.Web.Script.Serialization;
 
 namespace ModAssistant
 {
     class OneClickInstaller
     {
-        private const string ModelSaberURLPrefix = "https://modelsaber.com/files/";
-        private const string BeatSaverURLPrefix = "https://beatsaver.com";
+        private static readonly string[] Protocols = new[] { "modelsaber", "beatsaver", "bsplaylist" };
+        public static OneClickStatus Status = new OneClickStatus();
 
-        private static string BeatSaberPath = App.BeatSaberInstallDirectory;
-
-        private const string CustomAvatarsFolder = "CustomAvatars";
-        private const string CustomSabersFolder = "CustomSabers";
-        private const string CustomPlatformsFolder = "CustomPlatforms";
-        private static readonly string CustomSongsFolder = Path.Combine("Beat Saber_Data", "CustomLevels");
-
-        private static readonly string[] Protocols = new[] { "modelsaber", "beatsaver" };
-
-        private const bool BypassDownloadCounter = false;
-        public static void InstallAsset(string link)
+        public static async Task InstallAsset(string link)
         {
             Uri uri = new Uri(link);
             if (!Protocols.Contains(uri.Scheme)) return;
@@ -37,127 +19,46 @@ namespace ModAssistant
             switch (uri.Scheme)
             {
                 case "modelsaber":
-                    ModelSaber(uri);
+                    await ModelSaber(uri);
                     break;
                 case "beatsaver":
-                    BeatSaver(uri);
+                    await BeatSaver(uri);
                     break;
+                case "bsplaylist":
+                    await Playlist(uri);
+                    break;
+            }
+            if (App.OCIWindow != "No")
+            {
+                Status.StopRotation();
+                API.Utils.SetMessage((string)Application.Current.FindResource("OneClick:Done"));
+            }
+            if (App.OCIWindow == "Close")
+            {
+                Application.Current.Shutdown();
             }
         }
 
-        private static void BeatSaver(Uri uri)
+        private static async Task BeatSaver(Uri uri)
         {
             string Key = uri.Host;
-
-            string json = string.Empty;
-            BeatSaverApiResponse Response;
-
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(BeatSaverURLPrefix + "/api/maps/detail/" + Key);
-            request.AutomaticDecompression = DecompressionMethods.GZip;
-            request.UserAgent = "ModAssistant/" + App.Version;
-
-            try
-            {
-                using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-                using (Stream stream = response.GetResponseStream())
-                using (StreamReader reader = new StreamReader(stream))
-                {
-                    var serializer = new JavaScriptSerializer();
-                    Response = serializer.Deserialize<BeatSaverApiResponse>(reader.ReadToEnd());
-                }
-            }
-            catch (Exception e)
-            {
-                MessageBox.Show("Could not get map details.\n\n" + e);
-                return;
-            }
-
-            string zip = Path.Combine(BeatSaberPath, CustomSongsFolder, Response.hash) + ".zip";
-            string directory = Path.Combine(
-                BeatSaberPath,
-                CustomSongsFolder,
-                String.Concat(
-                    (Response.key + " (" + Response.metadata.songName + " - " + Response.metadata.levelAuthorName + ")")
-                    .Split(Utils.Constants.IllegalCharacters)
-                )
-            );
-
-            if (BypassDownloadCounter)
-            {
-                DownloadAsset(BeatSaverURLPrefix + Response.directDownload, CustomSongsFolder, Response.hash + ".zip");
-            }
-            else
-            {
-                DownloadAsset(BeatSaverURLPrefix + Response.downloadURL, CustomSongsFolder, Response.hash + ".zip");
-            }
-
-            if (File.Exists(zip))
-            {
-                using (FileStream stream = new FileStream(zip, FileMode.Open))
-                {
-                    using (ZipArchive archive = new ZipArchive(stream))
-                    {
-                        foreach (ZipArchiveEntry file in archive.Entries)
-                        {
-                            string fileDirectory = Path.GetDirectoryName(Path.Combine(directory, file.FullName));
-                            if (!Directory.Exists(fileDirectory))
-                                Directory.CreateDirectory(fileDirectory);
-
-                            if (!String.IsNullOrEmpty(file.Name))
-                                file.ExtractToFile(Path.Combine(directory, file.FullName), true);
-                        }
-                    }
-                }
-
-                File.Delete(zip);
-            } 
-            else
-            {
-                MessageBox.Show("Could not download the song.\nThere might be issues with BeatSaver or your internet connection.", "Failed to download song ZIP");
-            }
+            await API.BeatSaver.GetFromKey(Key);
         }
 
-        private static void ModelSaber(Uri uri)
+        private static async Task ModelSaber(Uri uri)
         {
-            switch (uri.Host)
-            {
-                case "avatar":
-                    DownloadAsset(ModelSaberURLPrefix + uri.Host + uri.AbsolutePath, CustomAvatarsFolder);
-                    break;
-                case "saber":
-                    DownloadAsset(ModelSaberURLPrefix + uri.Host + uri.AbsolutePath, CustomSabersFolder);
-                    break;
-                case "platform":
-                    DownloadAsset(ModelSaberURLPrefix + uri.Host + uri.AbsolutePath, CustomPlatformsFolder);
-                    break;
-            }
+            if (App.OCIWindow != "No") Status.Show();
+            API.Utils.SetMessage($"{string.Format((string)Application.Current.FindResource("OneClick:Installing"), System.Web.HttpUtility.UrlDecode(uri.Segments.Last()))}");
+            await API.ModelSaber.GetModel(uri);
         }
 
-        private static void DownloadAsset(string link, string folder, string fileName = null)
+        private static async Task Playlist(Uri uri)
         {
-            if (string.IsNullOrEmpty(BeatSaberPath))
-            {
-                Utils.SendNotify("Beat Saber installation path not found.");
-            }
-            try
-            {
-                Directory.CreateDirectory(Path.Combine(BeatSaberPath, folder));
-                if (String.IsNullOrEmpty(fileName))
-                    fileName = WebUtility.UrlDecode(Path.Combine(BeatSaberPath, folder, new Uri(link).Segments.Last()));
-                else
-                    fileName = WebUtility.UrlDecode(Path.Combine(BeatSaberPath, folder, fileName));
-
-                Utils.Download(link, fileName);
-                Utils.SendNotify("Installed: " + Path.GetFileNameWithoutExtension(fileName));
-
-            }
-            catch
-            {
-                Utils.SendNotify("Failed to install.");
-            }
+            if (App.OCIWindow != "No") Status.Show();
+            await API.Playlists.DownloadAll(uri);
         }
 
-        public static void Register(string Protocol, bool Background = false)
+        public static void Register(string Protocol, bool Background = false, string Description = null)
         {
             if (IsRegistered(Protocol) == true)
                 return;
@@ -174,18 +75,23 @@ namespace ModAssistant
 
                     if (ProtocolKey.GetValue("OneClick-Provider", "").ToString() != "ModAssistant")
                     {
+                        if (Description != null)
+                        {
+                            ProtocolKey.SetValue("", Description, RegistryValueKind.String);
+                        }
                         ProtocolKey.SetValue("URL Protocol", "", RegistryValueKind.String);
                         ProtocolKey.SetValue("OneClick-Provider", "ModAssistant", RegistryValueKind.String);
                         CommandKey.SetValue("", $"\"{Utils.ExePath}\" \"--install\" \"%1\"");
                     }
 
-                    Utils.SendNotify($"{Protocol} One Click Install handlers registered!");
+                    Utils.SendNotify(string.Format((string)Application.Current.FindResource("OneClick:ProtocolHandler:Registered"), Protocol));
                 }
                 else
                 {
-                    Utils.StartAsAdmin($"\"--register\" \"{Protocol}\"");
+                    Utils.StartAsAdmin($"\"--register\" \"{Protocol}\" \"{Description}\"");
                 }
-            } catch (Exception e)
+            }
+            catch (Exception e)
             {
                 MessageBox.Show(e.ToString());
             }
@@ -212,7 +118,8 @@ namespace ModAssistant
                             Registry.ClassesRoot.DeleteSubKeyTree(Protocol);
                         }
                     }
-                    Utils.SendNotify($"{Protocol} One Click Install handlers unregistered!");
+
+                    Utils.SendNotify(string.Format((string)Application.Current.FindResource("OneClick:ProtocolHandler:Unregistered"), Protocol));
                 }
                 else
                 {
@@ -239,84 +146,6 @@ namespace ModAssistant
                 return true;
             else
                 return false;
-        }
-    }
-
-    class BeatSaverApiResponse
-    {
-        public Metadata metadata { get; set; }
-        public Stats stats { get; set; }
-        public string description { get; set; }
-        public DateTime? deletedAt { get; set; }
-        public string _id { get; set; }
-        public string key { get; set; }
-        public string name { get; set; }
-        public Uploader uploader { get; set; }
-        public DateTime uploaded { get; set; }
-        public string hash { get; set; }
-        public string directDownload { get; set; }
-        public string downloadURL { get; set; }
-        public string coverURL { get; set; }
-
-        public class Difficulties
-        {
-            public bool easy { get; set; }
-            public bool normal { get; set; }
-            public bool hard { get; set; }
-            public bool expert { get; set; }
-            public bool expertPlus { get; set; }
-        }
-
-        public class Metadata
-        {
-            public Difficulties difficulties { get; set; }
-            public Characteristic[] characteristics { get; set; }
-            public string songName { get; set; }
-            public string songSubName { get; set; }
-            public string songAuthorName { get; set; }
-            public string levelAuthorName { get; set; }
-            public double bpm { get; set; }
-        }
-
-        public class Characteristic 
-        {
-            public string name { get; set; }
-            public CharacteristicDifficulties difficulties { get; set; }
-        }
-
-        public class CharacteristicDifficulties 
-        {
-            public Difficulty easy { get; set; }
-            public Difficulty normal { get; set; }
-            public Difficulty hard { get; set; }
-            public Difficulty expert { get; set; }
-            public Difficulty expertPlus { get; set; }
-        }
-
-        public class Difficulty 
-        {
-            public double? duration { get; set; }
-            public double? length { get; set; }
-            public double bombs { get; set; }
-            public double notes { get; set; }
-            public double obstacles { get; set; }
-            public double njs { get; set; }
-        }
-
-        public class Stats
-        {
-            public int downloads { get; set; }
-            public int plays { get; set; }
-            public int downVotes { get; set; }
-            public int upVotes { get; set; }
-            public double heat { get; set; }
-            public double rating { get; set; }
-        }
-
-        public class Uploader
-        {
-            public string _id { get; set; }
-            public string username { get; set; }
         }
     }
 }

@@ -1,9 +1,5 @@
-﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 
 namespace ModAssistant
@@ -16,11 +12,11 @@ namespace ModAssistant
 
             foreach (string file in Directory.GetFileSystemEntries(path))
             {
-                string line = String.Empty;
+                string line = string.Empty;
 
                 if (File.Exists(file))
                 {
-                    line = Utils.CalculateMD5(file) + " " +LevelSeparator(level) + "├─ " + Path.GetFileName(file);
+                    line = Utils.CalculateMD5(file) + " " + LevelSeparator(level) + "├─ " + Path.GetFileName(file);
                     entries.Add(line);
 
                 }
@@ -40,21 +36,21 @@ namespace ModAssistant
                 {
                     MessageBox.Show("! " + file);
                 }
-
-
             }
             if (entries.Count > 0)
+            {
                 entries[entries.Count - 1] = entries[entries.Count - 1].Replace("├", "└");
+            }
 
             return entries.ToArray();
         }
 
         private static string LevelSeparator(int level)
         {
-            string separator = String.Empty;
-            for(int i = 0; i < level; i++)
+            string separator = string.Empty;
+            for (int i = 0; i < level; i++)
             {
-                separator = separator + "│  ";
+                separator += "│  ";
             }
             return separator;
         }

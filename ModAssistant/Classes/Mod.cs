@@ -1,9 +1,5 @@
-﻿using System;
 using System.Collections.Generic;
 using ModAssistant.Pages;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ModAssistant
 {
@@ -13,6 +9,7 @@ namespace ModAssistant
         public string version;
         public string gameVersion;
         public string _id;
+        public string status;
         public string authorId;
         public string uploadedDate;
         public string updatedDate;

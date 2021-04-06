@@ -1,67 +1,59 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Net;
-using System.Security.Principal;
-using System.Text;
 using System.Threading.Tasks;
-using System.Web.Script.Serialization;
 using System.Windows;
+using static ModAssistant.Http;
 
 namespace ModAssistant
 {
     class Updater
     {
-        private static string APILatestURL = "https://api.github.com/repos/uDMBK/ModAssistant/releases/latest";
+        private static readonly string APILatestURL = "https://github.com/uDMBK/ModAssistant-Unrestricted/releases/latest";
 
         private static Update LatestUpdate;
         private static Version CurrentVersion;
         private static Version LatestVersion;
         private static bool NeedsUpdate = false;
+        private static readonly string NewExe = Path.Combine(Path.GetDirectoryName(Utils.ExePath), "ModAssistant.exe");
+        private static readonly string Arguments = App.Arguments;
 
-        public static bool CheckForUpdate()
+#pragma warning disable CS0162 // Unreachable code detected
+        public static async Task<bool> CheckForUpdate()
         {
-            string json = string.Empty;
-            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(APILatestURL);
-            request.AutomaticDecompression = DecompressionMethods.GZip;
-            request.UserAgent = "uDMBK/" + App.Version;
+#if DEBUG
+            return false;
+#endif
 
-            using (HttpWebResponse response = (HttpWebResponse)request.GetResponse())
-            using (Stream stream = response.GetResponseStream())
-            using (StreamReader reader = new StreamReader(stream))
-            {
-                var serializer = new JavaScriptSerializer();
-                LatestUpdate = serializer.Deserialize<Update>(reader.ReadToEnd());
-            }
-            
-            LatestVersion = new Version(LatestUpdate.tag_name.Substring(1).Replace("-unres", ""));
+            var resp = await HttpClient.GetAsync(APILatestURL);
+            var body = await resp.Content.ReadAsStringAsync();
+            LatestUpdate = JsonSerializer.Deserialize<Update>(body);
+
+            LatestVersion = new Version(LatestUpdate.tag_name.Substring(1));
             CurrentVersion = new Version(App.Version);
-
 
             return (LatestVersion > CurrentVersion);
         }
+#pragma warning restore CS0162 // Unreachable code detected
 
-        public static void Run()
+        public static async Task Run()
         {
+            if (Path.GetFileName(Utils.ExePath).Equals("ModAssistant.old.exe")) RunNew();
             try
             {
-                NeedsUpdate = CheckForUpdate();
+                NeedsUpdate = await CheckForUpdate();
             }
             catch
             {
-                Utils.SendNotify("Couldn't check for updates.");
+                Utils.SendNotify((string)Application.Current.FindResource("Updater:CheckFailed"));
             }
 
-            if (NeedsUpdate) StartUpdate();
+            if (NeedsUpdate) await StartUpdate();
         }
 
-        public static void StartUpdate()
+        public static async Task StartUpdate()
         {
-            string Directory = Path.GetDirectoryName(Utils.ExePath);
-            string OldExe = Path.Combine(Directory, "ModAssistant.old.exe");
-
+            string OldExe = Path.Combine(Path.GetDirectoryName(Utils.ExePath), "ModAssistant.old.exe");
             string DownloadLink = null;
 
             foreach (Update.Asset asset in LatestUpdate.assets)
@@ -72,25 +64,29 @@ namespace ModAssistant
                 }
             }
 
-            if (String.IsNullOrEmpty(DownloadLink))
+            if (string.IsNullOrEmpty(DownloadLink))
             {
-                Utils.SendNotify("Couldn't download update.");
+                Utils.SendNotify((string)Application.Current.FindResource("Updater:DownloadFailed"));
             }
             else
             {
                 if (File.Exists(OldExe))
+                {
                     File.Delete(OldExe);
+                }
 
                 File.Move(Utils.ExePath, OldExe);
 
-                Utils.Download(DownloadLink, Utils.ExePath);
-                Process.Start(Utils.ExePath);
-                App.Current.Shutdown();
-
+                await Utils.Download(DownloadLink, NewExe);
+                RunNew();
             }
-
         }
 
+        private static void RunNew()
+        {
+            Process.Start(NewExe, Arguments);
+            Application.Current.Dispatcher.Invoke(() => { Application.Current.Shutdown(); });
+        }
     }
 
     public class Update

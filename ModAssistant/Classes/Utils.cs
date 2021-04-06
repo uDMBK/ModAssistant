@@ -1,18 +1,18 @@
-﻿using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Configuration;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Management;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Management;
-using ModAssistant.Properties;
-using System.Net;
-using System.Diagnostics;
-using System.Security.Principal;
+using Microsoft.Win32;
+using static ModAssistant.Http;
 
 namespace ModAssistant
 {
@@ -27,6 +27,8 @@ namespace ModAssistant
             public const string BeatModsAPIUrl = "https://beatmods.com/api/v1/";
             public const string TeknikAPIUrl = "https://api.teknik.io/v1/";
             public const string BeatModsURL = "https://beatmods.com";
+            public const string BeatModsVersions = "https://versions.beatmods.com/versions.json";
+            public const string BeatModsAlias = "https://alias.beatmods.com/aliases.json";
             public const string WeebCDNAPIURL = "https://pat.assistant.moe/api/v1.0/";
             public const string BeatModsModsOptions = "mod?status=approved";
             public const string MD5Spacer = "                                 ";
@@ -61,13 +63,15 @@ namespace ModAssistant
             public string ext;
         }
 
-        public static void SendNotify(string message, string title = "Mod Assistant")
+        public static void SendNotify(string message, string title = null)
         {
+            string defaultTitle = (string)Application.Current.FindResource("Utils:NotificationTitle");
+
             var notification = new System.Windows.Forms.NotifyIcon()
             {
                 Visible = true,
                 Icon = System.Drawing.SystemIcons.Information,
-                BalloonTipTitle = title,
+                BalloonTipTitle = title ?? defaultTitle,
                 BalloonTipText = message
             };
 
@@ -78,24 +82,29 @@ namespace ModAssistant
 
         public static void StartAsAdmin(string Arguments, bool Close = false)
         {
-            Process process = new Process();
-            process.StartInfo.FileName = Process.GetCurrentProcess().MainModule.FileName;
-            process.StartInfo.Arguments = Arguments;
-            process.StartInfo.UseShellExecute = true;
-            process.StartInfo.Verb = "runas";
+            using (Process process = new Process())
+            {
+                process.StartInfo.FileName = Process.GetCurrentProcess().MainModule.FileName;
+                process.StartInfo.Arguments = Arguments;
+                process.StartInfo.UseShellExecute = true;
+                process.StartInfo.Verb = "runas";
 
-            try
-            {
-                process.Start();
-                if (!Close)
-                    process.WaitForExit();
+                try
+                {
+                    process.Start();
+
+                    if (!Close)
+                    {
+                        process.WaitForExit();
+                    }
+                }
+                catch
+                {
+                    MessageBox.Show((string)Application.Current.FindResource("Utils:RunAsAdmin"));
+                }
+
+                if (Close) Application.Current.Shutdown();
             }
-            catch
-            {
-                MessageBox.Show("Mod Assistant needs to run this task as Admin. Please try again.");
-            }
-            if (Close)
-                App.Current.Shutdown();
         }
 
         public static string CalculateMD5(string filename)
@@ -112,10 +121,9 @@ namespace ModAssistant
 
         public static string GetInstallDir()
         {
-            string InstallDir = null;
-            
-            InstallDir = Properties.Settings.Default.InstallFolder;
-            if (!String.IsNullOrEmpty(InstallDir)
+            string InstallDir = Properties.Settings.Default.InstallFolder;
+
+            if (!string.IsNullOrEmpty(InstallDir)
                 && Directory.Exists(InstallDir)
                 && Directory.Exists(Path.Combine(InstallDir, "Beat Saber_Data", "Plugins"))
                 && File.Exists(Path.Combine(InstallDir, "Beat Saber.exe")))
@@ -128,7 +136,7 @@ namespace ModAssistant
                 InstallDir = GetSteamDir();
             }
             catch { }
-            if (!String.IsNullOrEmpty(InstallDir))
+            if (!string.IsNullOrEmpty(InstallDir))
             {
                 return InstallDir;
             }
@@ -138,15 +146,15 @@ namespace ModAssistant
                 InstallDir = GetOculusDir();
             }
             catch { }
-            if (!String.IsNullOrEmpty(InstallDir))
+            if (!string.IsNullOrEmpty(InstallDir))
             {
                 return InstallDir;
             }
 
-            MessageBox.Show("Could not detect your Beat Saber install folder. Please select it manually.");
+            MessageBox.Show((string)Application.Current.FindResource("Utils:NoInstallFolder"));
 
             InstallDir = GetManualDir();
-            if (!String.IsNullOrEmpty(InstallDir))
+            if (!string.IsNullOrEmpty(InstallDir))
             {
                 return InstallDir;
             }
@@ -170,18 +178,21 @@ namespace ModAssistant
         {
 
             string SteamInstall = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)?.OpenSubKey("SOFTWARE")?.OpenSubKey("WOW6432Node")?.OpenSubKey("Valve")?.OpenSubKey("Steam")?.GetValue("InstallPath").ToString();
-            if (String.IsNullOrEmpty(SteamInstall))
+            if (string.IsNullOrEmpty(SteamInstall))
             {
                 SteamInstall = Registry.LocalMachine.OpenSubKey("SOFTWARE")?.OpenSubKey("WOW6432Node")?.OpenSubKey("Valve")?.OpenSubKey("Steam")?.GetValue("InstallPath").ToString();
             }
-            if (String.IsNullOrEmpty(SteamInstall)) return null;
+
+            if (string.IsNullOrEmpty(SteamInstall)) return null;
 
             string vdf = Path.Combine(SteamInstall, @"steamapps\libraryfolders.vdf");
             if (!File.Exists(@vdf)) return null;
 
             Regex regex = new Regex("\\s\"\\d\"\\s+\"(.+)\"");
-            List<string> SteamPaths = new List<string>();
-            SteamPaths.Add(Path.Combine(SteamInstall, @"steamapps"));
+            List<string> SteamPaths = new List<string>
+            {
+                Path.Combine(SteamInstall, @"steamapps")
+            };
 
             using (StreamReader reader = new StreamReader(@vdf))
             {
@@ -201,7 +212,7 @@ namespace ModAssistant
             {
                 if (File.Exists(Path.Combine(@path, @"appmanifest_" + Constants.BeatSaberAPPID + ".acf")))
                 {
-                    using (StreamReader reader = new StreamReader(Path.Combine(@path,  @"appmanifest_" + Constants.BeatSaberAPPID + ".acf")))
+                    using (StreamReader reader = new StreamReader(Path.Combine(@path, @"appmanifest_" + Constants.BeatSaberAPPID + ".acf")))
                     {
                         string line;
                         while ((line = reader.ReadLine()) != null)
@@ -227,14 +238,14 @@ namespace ModAssistant
             using (FileStream fs = new FileStream(filename, FileMode.Open, FileAccess.Read))
             {
                 byte[] file = File.ReadAllBytes(filename);
-                byte[] bytes = new byte[16];
+                byte[] bytes = new byte[32];
 
                 fs.Read(file, 0, Convert.ToInt32(fs.Length));
                 fs.Close();
-                int index = Encoding.Default.GetString(file).IndexOf("public.app-category.games") + 136;
+                int index = Encoding.UTF8.GetString(file).IndexOf("public.app-category.games") + 136;
 
-                Array.Copy(file, index, bytes, 0, 16);
-                string version = Encoding.Default.GetString(bytes).Trim(Utils.Constants.IllegalCharacters);
+                Array.Copy(file, index, bytes, 0, 32);
+                string version = Encoding.UTF8.GetString(bytes).Trim(Constants.IllegalCharacters);
 
                 return version;
             }
@@ -243,9 +254,9 @@ namespace ModAssistant
         public static string GetOculusDir()
         {
             string OculusInstall = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64)?.OpenSubKey("SOFTWARE")?.OpenSubKey("Wow6432Node")?.OpenSubKey("Oculus VR, LLC")?.OpenSubKey("Oculus")?.OpenSubKey("Config")?.GetValue("InitialAppLibrary").ToString();
-            if (String.IsNullOrEmpty(OculusInstall)) return null;
+            if (string.IsNullOrEmpty(OculusInstall)) return null;
 
-            if (!String.IsNullOrEmpty(OculusInstall))
+            if (!string.IsNullOrEmpty(OculusInstall))
             {
                 if (File.Exists(Path.Combine(OculusInstall, "Software", "hyperbolic-magnetism-beat-saber", "Beat Saber.exe")))
                 {
@@ -258,47 +269,50 @@ namespace ModAssistant
             {
                 // Oculus libraries uses GUID volume paths like this "\\?\Volume{0fea75bf-8ad6-457c-9c24-cbe2396f1096}\Games\Oculus Apps", we need to transform these to "D:\Game"\Oculus Apps"
                 WqlObjectQuery wqlQuery = new WqlObjectQuery("SELECT * FROM Win32_Volume");
-                ManagementObjectSearcher searcher = new ManagementObjectSearcher(wqlQuery);
-                Dictionary<string, string> guidLetterVolumes = new Dictionary<string, string>();
-
-                foreach (ManagementBaseObject disk in searcher.Get())
+                using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(wqlQuery))
                 {
-                    var diskId = ((string)disk.GetPropertyValue("DeviceID")).Substring(11, 36);
-                    var diskLetter = ((string)disk.GetPropertyValue("DriveLetter")) + @"\";
+                    Dictionary<string, string> guidLetterVolumes = new Dictionary<string, string>();
 
-                    if (!string.IsNullOrWhiteSpace(diskLetter))
+                    foreach (ManagementBaseObject disk in searcher.Get())
                     {
-                        guidLetterVolumes.Add(diskId, diskLetter);
-                    }
-                }
+                        var diskId = ((string)disk.GetPropertyValue("DeviceID")).Substring(11, 36);
+                        var diskLetter = ((string)disk.GetPropertyValue("DriveLetter")) + @"\";
 
-                // Search among the library folders
-                foreach (string libraryKeyName in librariesKey.GetSubKeyNames())
-                {
-                    using (RegistryKey libraryKey = librariesKey.OpenSubKey(libraryKeyName))
-                    {
-                        string libraryPath = (string)libraryKey.GetValue("Path");
-                        // Yoinked this code from Megalon's fix. <3
-                        string GUIDLetter = guidLetterVolumes.FirstOrDefault(x => libraryPath.Contains(x.Key)).Value;
-                        if (!String.IsNullOrEmpty(GUIDLetter))
+                        if (!string.IsNullOrWhiteSpace(diskLetter))
                         {
-                            string finalPath = Path.Combine(GUIDLetter, libraryPath.Substring(49), @"Software\hyperbolic-magnetism-beat-saber");
-                            if (File.Exists(Path.Combine(finalPath, "Beat Saber.exe")))
+                            guidLetterVolumes.Add(diskId, diskLetter);
+                        }
+                    }
+
+                    // Search among the library folders
+                    foreach (string libraryKeyName in librariesKey.GetSubKeyNames())
+                    {
+                        using (RegistryKey libraryKey = librariesKey.OpenSubKey(libraryKeyName))
+                        {
+                            string libraryPath = (string)libraryKey.GetValue("Path");
+                            // Yoinked this code from Megalon's fix. <3
+                            string GUIDLetter = guidLetterVolumes.FirstOrDefault(x => libraryPath.Contains(x.Key)).Value;
+                            if (!string.IsNullOrEmpty(GUIDLetter))
                             {
-                                return SetDir(finalPath, "Oculus");
+                                string finalPath = Path.Combine(GUIDLetter, libraryPath.Substring(49), @"Software\hyperbolic-magnetism-beat-saber");
+                                if (File.Exists(Path.Combine(finalPath, "Beat Saber.exe")))
+                                {
+                                    return SetDir(finalPath, "Oculus");
+                                }
                             }
                         }
                     }
                 }
             }
+
             return null;
         }
 
         public static string GetManualDir()
         {
-            var dialog = new Microsoft.Win32.SaveFileDialog()
+            var dialog = new SaveFileDialog()
             {
-                Title = "Select your Beat Saber install folder",
+                Title = (string)Application.Current.FindResource("Utils:InstallDir:DialogTitle"),
                 Filter = "Directory|*.this.directory",
                 FileName = "select"
             };
@@ -326,13 +340,71 @@ namespace ModAssistant
             return null;
         }
 
-        public static void Download(string link, string output)
+        public static string GetManualFile(string filter = "", string title = "Open File")
         {
-            WebClient webClient = new WebClient();
-            webClient.Headers.Add("user-agent", "ModAssistant/" + App.Version);
+            var dialog = new OpenFileDialog()
+            {
+                Title = title,
+                Filter = filter,
+                Multiselect = false,
+            };
 
-            byte[] file = webClient.DownloadData(link);
-            File.WriteAllBytes(output, file);
+            if (dialog.ShowDialog() == true)
+            {
+                return dialog.FileName;
+            }
+            return null;
+        }
+
+        public static byte[] StreamToArray(Stream input)
+        {
+            byte[] buffer = new byte[16 * 1024];
+            using (MemoryStream ms = new MemoryStream())
+            {
+                int read;
+                while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                {
+                    ms.Write(buffer, 0, read);
+                }
+                return ms.ToArray();
+            }
+        }
+
+        public static void OpenFolder(string location)
+        {
+            if (!location.EndsWith(Path.DirectorySeparatorChar.ToString())) location += Path.DirectorySeparatorChar;
+            if (Directory.Exists(location))
+            {
+                try
+                {
+                    Process.Start(new System.Diagnostics.ProcessStartInfo()
+                    {
+                        FileName = location,
+                        UseShellExecute = true,
+                        Verb = "open"
+                    });
+                    return;
+                }
+                catch { }
+            }
+            MessageBox.Show($"{string.Format((string)Application.Current.FindResource("Utils:CannotOpenFolder"), location)}.");
+        }
+
+        public static void Log(string message, string severity = "LOG")
+        {
+            string path = Path.GetDirectoryName(ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.PerUserRoamingAndLocal).FilePath);
+            string logFile = $"{path}{Path.DirectorySeparatorChar}log.log";
+            File.AppendAllText(logFile, $"[{DateTime.UtcNow:yyyy-mm-dd HH:mm:ss.ffffff}][{severity.ToUpper()}] {message}\n");
+        }
+
+        public static async Task Download(string link, string output)
+        {
+            var resp = await HttpClient.GetAsync(link);
+            using (var stream = await resp.Content.ReadAsStreamAsync())
+            using (var fs = new FileStream(output, FileMode.OpenOrCreate, FileAccess.Write))
+            {
+                await stream.CopyToAsync(fs);
+            }
         }
 
         private delegate void ShowMessageBoxDelegate(string Message, string Caption);
@@ -352,6 +424,31 @@ namespace ModAssistant
         {
             ShowMessageBoxDelegate caller = new ShowMessageBoxDelegate(ShowMessageBox);
             caller.BeginInvoke(Message, null, null, null);
+        }
+
+        /// <summary>
+        /// Attempts to write the specified string to the <see cref="System.Windows.Clipboard"/>.
+        /// </summary>
+        /// <param name="text">The string to be written</param>
+        public static void SetClipboard(string text)
+        {
+            bool success = false;
+            try
+            {
+                Clipboard.SetText(text);
+                success = true;
+            }
+            catch (Exception)
+            {
+                // Swallow exceptions relating to writing data to clipboard.
+            }
+
+            // This could be placed in the try/catch block but we don't
+            // want to suppress exceptions for non-clipboard operations
+            if (success)
+            {
+                SendNotify($"Copied text to clipboard");
+            }
         }
     }
 }

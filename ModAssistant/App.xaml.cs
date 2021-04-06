@@ -1,12 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using System.Configuration;
-using System.Data;
 using System.Linq;
+using System.Net;
 using System.Reflection;
 using System.Threading.Tasks;
 using System.Windows;
-using ModAssistant;
 
 namespace ModAssistant
 {
@@ -20,12 +18,21 @@ namespace ModAssistant
         public static bool SaveModSelection;
         public static bool CheckInstalledMods;
         public static bool SelectInstalledMods;
+        public static bool ReinstallInstalledMods;
+        public static bool CloseWindowOnFinish;
         public static string Version = Assembly.GetExecutingAssembly().GetName().Version.ToString();
         public static List<string> SavedMods = ModAssistant.Properties.Settings.Default.SavedMods.Split(',').ToList();
+        public static MainWindow window;
+        public static string Arguments;
+        public static bool Update = true;
+        public static bool GUI = true;
+        public static string OCIWindow;
 
-
-        private void Application_Startup(object sender, StartupEventArgs e)
+        private async void Application_Startup(object sender, StartupEventArgs e)
         {
+            // Set SecurityProtocol to prevent crash with TLS
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+
             if (ModAssistant.Properties.Settings.Default.UpgradeRequired)
             {
                 ModAssistant.Properties.Settings.Default.Upgrade();
@@ -34,13 +41,25 @@ namespace ModAssistant
             }
 
             Version = Version.Substring(0, Version.Length - 2);
-            BeatSaberInstallDirectory = Utils.GetInstallDir();
-
-            while (String.IsNullOrEmpty(App.BeatSaberInstallDirectory))
+            OCIWindow = ModAssistant.Properties.Settings.Default.OCIWindow;
+            if (string.IsNullOrEmpty(OCIWindow))
             {
-                if (System.Windows.Forms.MessageBox.Show($"Press OK to try again, or Cancel to close application.", $"Couldn't find your Beat Saber install folder!", System.Windows.Forms.MessageBoxButtons.OKCancel) == System.Windows.Forms.DialogResult.OK)
+                OCIWindow = "Yes";
+            }
+            Pages.Options options = Pages.Options.Instance;
+            options.InstallDirectory =
+                BeatSaberInstallDirectory = Utils.GetInstallDir();
+
+            Languages.LoadLanguages();
+
+            while (string.IsNullOrEmpty(BeatSaberInstallDirectory))
+            {
+                string title = (string)Current.FindResource("App:InstallDirDialog:Title");
+                string body = (string)Current.FindResource("App:InstallDirDialog:OkCancel");
+
+                if (System.Windows.Forms.MessageBox.Show(body, title, System.Windows.Forms.MessageBoxButtons.OKCancel) == System.Windows.Forms.DialogResult.OK)
                 {
-                    App.BeatSaberInstallDirectory = Utils.GetManualDir();
+                    BeatSaberInstallDirectory = Utils.GetManualDir();
                 }
                 else
                 {
@@ -48,66 +67,164 @@ namespace ModAssistant
                 }
             }
 
-            BeatSaberInstallType = ModAssistant.Properties.Settings.Default.StoreType;
-            SaveModSelection = ModAssistant.Properties.Settings.Default.SaveSelected;
-            CheckInstalledMods = ModAssistant.Properties.Settings.Default.CheckInstalled;
-            SelectInstalledMods = ModAssistant.Properties.Settings.Default.SelectInstalled;
+            options.InstallType =
+                BeatSaberInstallType = ModAssistant.Properties.Settings.Default.StoreType;
+            options.SaveSelection =
+                SaveModSelection = ModAssistant.Properties.Settings.Default.SaveSelected;
+            options.CheckInstalledMods =
+                CheckInstalledMods = ModAssistant.Properties.Settings.Default.CheckInstalled;
+            options.SelectInstalledMods =
+                SelectInstalledMods = ModAssistant.Properties.Settings.Default.SelectInstalled;
+            options.ReinstallInstalledMods =
+                ReinstallInstalledMods = ModAssistant.Properties.Settings.Default.ReinstallInstalled;
+            options.CloseWindowOnFinish =
+                CloseWindowOnFinish = ModAssistant.Properties.Settings.Default.CloseWindowOnFinish;
 
-            if (e.Args.Length == 0)
+            await ArgumentHandler(e.Args);
+            await Init();
+            options.UpdateOCIWindow(OCIWindow);
+        }
+
+        private async Task Init()
+        {
+            if (Update)
             {
-                Updater.Run();
+                try
+                {
+                    await Task.Run(async () => await Updater.Run());
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    Utils.StartAsAdmin(Arguments, true);
+                }
+            }
 
-                MainWindow window = new MainWindow();
+            if (GUI)
+            {
+                window = new MainWindow();
                 window.Show();
             }
             else
             {
-                ArgumentHandler(e.Args);
+                //Application.Current.Shutdown();
             }
         }
 
-        private void ArgumentHandler(string[] Args)
+        private async Task ArgumentHandler(string[] args)
         {
-            switch (Args[0])
+            Arguments = string.Join(" ", args);
+            while (args.Length > 0)
             {
-                case "--install":
-                    if (!String.IsNullOrEmpty(Args[1]))
-                        OneClickInstaller.InstallAsset(Args[1]);
-                    else
-                        Utils.SendNotify("Invalid argument! '--install' requires an option.");
-                    break;
+                switch (args[0])
+                {
+                    case "--install":
+                        if (args.Length < 2 || string.IsNullOrEmpty(args[1]))
+                        {
+                            Utils.SendNotify(string.Format((string)Current.FindResource("App:InvalidArgument"), "--install"));
+                        }
+                        else
+                        {
+                            await OneClickInstaller.InstallAsset(args[1]);
+                        }
 
-                case "--no-update":
-                    MainWindow window = new MainWindow();
-                    window.Show();
-                    break;
+                        if (CloseWindowOnFinish)
+                        {
+                            await Task.Delay(5 * 1000);
+                            Current.Shutdown();
+                        }
 
-                case "--register":
-                    if (!String.IsNullOrEmpty(Args[1]))
-                        OneClickInstaller.Register(Args[1], true);
-                    else
-                        Utils.SendNotify("Invalid argument! '--register' requires an option.");
-                    break;
+                        Update = false;
+                        GUI = false;
+                        args = Shift(args, 2);
+                        break;
 
-                case "--unregister":
-                    if (!String.IsNullOrEmpty(Args[1]))
-                        OneClickInstaller.Unregister(Args[1], true);
-                    else
-                        Utils.SendNotify("Invalid argument! '--unregister' requires an option.");
-                    break;
+                    case "--no-update":
+                        Update = false;
+                        args = Shift(args);
+                        break;
 
-                default:
-                    Utils.SendNotify("Unrecognized argument. Closing Mod Assistant.");
-                    break;
+                    case "--language":
+                        if (args.Length < 2 || string.IsNullOrEmpty(args[1]))
+                        {
+                            Utils.SendNotify(string.Format((string)Current.FindResource("App:InvalidArgument"), "--language"));
+                        }
+                        else
+                        {
+                            if (Languages.LoadLanguage(args[1]))
+                            {
+                                ModAssistant.Properties.Settings.Default.LanguageCode = args[1];
+                                ModAssistant.Properties.Settings.Default.Save();
+                                Languages.UpdateUI(args[1]);
+                            }
+                        }
+
+                        args = Shift(args, 2);
+                        break;
+
+                    case "--register":
+                        if (args.Length < 3 || string.IsNullOrEmpty(args[1]))
+                        {
+                            Utils.SendNotify(string.Format((string)Current.FindResource("App:InvalidArgument"), "--register"));
+                        }
+                        else
+                        {
+                            OneClickInstaller.Register(args[1], true, args[2]);
+                        }
+
+                        Update = false;
+                        GUI = false;
+                        args = Shift(args, 3);
+                        break;
+
+                    case "--unregister":
+                        if (args.Length < 2 || string.IsNullOrEmpty(args[1]))
+                        {
+                            Utils.SendNotify(string.Format((string)Current.FindResource("App:InvalidArgument"), "--unregister"));
+                        }
+                        else
+                        {
+                            OneClickInstaller.Unregister(args[1], true);
+                        }
+
+                        Update = false;
+                        GUI = false;
+                        args = Shift(args, 2);
+                        break;
+
+                    case "--runforever":
+                        while (true)
+                        {
+
+                        }
+
+                    default:
+                        Utils.SendNotify((string)Current.FindResource("App:UnrecognizedArgument"));
+                        args = Shift(args);
+                        break;
+                }
             }
-            Current.Shutdown();
+        }
+
+        private static string[] Shift(string[] array, int places = 1)
+        {
+            if (places >= array.Length) return Array.Empty<string>();
+            string[] newArray = new string[array.Length - places];
+            for (int i = places; i < array.Length; i++)
+            {
+                newArray[i - places] = array[i];
+            }
+
+            return newArray;
         }
 
         private void Application_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
         {
-            MessageBox.Show("An unhandled exception just occurred: " + e.Exception, "Exception", MessageBoxButton.OK, MessageBoxImage.Warning);
+            string title = (string)Current.FindResource("App:Exception");
+            string body = (string)Current.FindResource("App:UnhandledException");
+            MessageBox.Show($"{body}: {e.Exception}", title, MessageBoxButton.OK, MessageBoxImage.Warning);
+
             e.Handled = true;
-            Application.Current.Shutdown();
+            Current.Shutdown();
         }
     }
 }
