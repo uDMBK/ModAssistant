@@ -1,5 +1,5 @@
-[![Mod Assistant](https://cdn.assistant.moe/images/ModAssistant/Icons/Banner.svg?v=5)](https://github.com/uDMBK/ModAssistant-Unrestricted/releases/latest)
-[![Download here!](https://cdn.assistant.moe/images/ModAssistant/Icons/Download.svg)](https://github.com/uDMBK/ModAssistant-Unrestricted/releases/latest)
+[![Mod Assistant](https://cdn.assistant.moe/images/ModAssistant/Icons/Banner.svg?v=5)](https://github.com/Assistant/ModAssistant/releases/latest)
+[![Download here!](https://cdn.assistant.moe/images/ModAssistant/Icons/Download.svg)](https://github.com/Assistant/ModAssistant/releases/latest)
 
 Mod Assistant is a PC mod installer for Beat Saber. It uses mods from [BeatMods](https://beatmods.com/).
 
@@ -24,7 +24,6 @@ Mod Assistant boasts a rich feature set, some of which include:
 * Complex theming engine
 * Localization support
 * Headpats and Hugs
-* No Anti-Piracy!
 
 ## Usage
 Download the newest installer from the release section and run it. This application auto-updates when launched, there is no need to download a new release each time.
@@ -140,5 +139,3 @@ Examples:
 ## Credits
 semver by Max Hauser
 https://github.com/maxhauser/semver
-anti piracy by udmbk aw yeah
-https://github.com/uDMBK
